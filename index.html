@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Dodecagon</title>
+    <script>
+        'use strict';
+        function fixSize() {
+            let x = document.documentElement.clientWidth;
+            let y = document.documentElement.clientHeight;
+            let svg = document.getElementById('svg');
+            svg.setAttribute('height', y);
+            svg.setAttribute('width', x);
+        }
+    </script>
+</head>
+
+<body>
+    <h1>Dodecagon</h1>
+    <svg id="svg" onload="fixSize()"> </svg>
+    <script>
+        'use strict'
+        const GREEN1 = '#7BC96F';
+        const GREEN2 = '#C6E48B';
+        const D = 40;
+        const EPS = 1e-5;
+
+
+        let svg = document.getElementById('svg');
+        let drag = {
+            isMouseDown: false,
+            target: null,
+            offsetX: 0,
+            offsetY: 0
+        };
+
+        function Data(type) {
+            this.type = type;
+            this.x = (type == 'square' ? 100 : type == 'triangle' ? 20 : 0);
+            this.y = (type == 'square' ? 20 : type == 'triangle' ? 20 + D * (1 - Math.sqrt(3) / 2) : 0);
+            this.theta = (type == 'square' ? Math.PI / 4 : type == 'triangle' ? Math.PI / 6 : 0);
+            this.isBaby = true;
+        }
+        let datas = [];
+
+        function getPoints(data) {
+            let type = data.type;
+            let x = data.x;
+            let y = data.y;
+            let theta = data.theta;
+            let points = [];
+            if (type == 'square') {
+                let r = D / Math.sqrt(2);
+                points = [
+                    x + r * Math.cos(theta + Math.PI * 0 / 2),
+                    y + r * Math.sin(theta + Math.PI * 0 / 2),
+                    x + r * Math.cos(theta + Math.PI * 1 / 2),
+                    y + r * Math.sin(theta + Math.PI * 1 / 2),
+                    x + r * Math.cos(theta + Math.PI * 2 / 2),
+                    y + r * Math.sin(theta + Math.PI * 2 / 2),
+                    x + r * Math.cos(theta + Math.PI * 3 / 2),
+                    y + r * Math.sin(theta + Math.PI * 3 / 2)];
+            }
+            if (type == 'triangle') {
+                let r = D / Math.sqrt(3);
+                points = [
+                    x + r * Math.cos(theta + Math.PI * 0 / 3),
+                    y + r * Math.sin(theta + Math.PI * 0 / 3),
+                    x + r * Math.cos(theta + Math.PI * 2 / 3),
+                    y + r * Math.sin(theta + Math.PI * 2 / 3),
+                    x + r * Math.cos(theta + Math.PI * 4 / 3),
+                    y + r * Math.sin(theta + Math.PI * 4 / 3)]
+            }
+            return points;
+        }
+        function getEdges(data) {
+            let points = getPoints(data);
+            points.push(points[0]);
+            points.push(points[1]);
+
+            let edges = []
+            for (let i = 0; i + 2 < points.length; i += 2) {
+                let edge = {
+                    p1: { x: points[i + 0], y: points[i + 1] },
+                    p2: { x: points[i + 2], y: points[i + 3] }
+                };
+                edges.push(edge);
+            }
+            return edges;
+        }
+
+        function createNewPolygon(type) {
+            let id = datas.length.toString();
+            let data = new Data(type);
+            let points = getPoints(data);
+            datas.push(data);
+
+            let polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            polygon.setAttribute('points', points);
+            polygon.setAttribute('fill', type == 'square' ? GREEN1 : GREEN2);
+            polygon.setAttribute('id', id);
+            polygon.setAttribute('stroke', 'white')
+            polygon.setAttribute('stroke-width', 1)
+            polygon.onmousedown = function (ev) { handleMouseDown(ev, id) };
+            svg.appendChild(polygon);
+        }
+        function handleMouseDown(ev, id) {
+            let i = parseInt(id);
+            let fig = document.getElementById(id);
+            ev.preventDefault();
+            drag.offsetX = ev.clientX - datas[i].x;
+            drag.offsetY = ev.clientY - datas[i].y;
+            drag.target = fig;
+            drag.isMouseDown = true;
+        }
+        createNewPolygon('square');
+        createNewPolygon('triangle');
+
+
+        function gyouza(polygon) {
+            let i = parseInt(polygon.id);
+            let dx = 0, dy = 0;
+            let theta = datas[i].theta;
+            let minDist = D;
+            function isParallel(edge1, edge2) {
+                let v1 = { x: edge1.p1.x - edge1.p2.x, y: edge1.p1.y - edge1.p2.y };
+                let v2 = { x: edge2.p1.x - edge2.p2.x, y: edge2.p1.y - edge2.p2.y };
+                let abs1 = v1.x ** 2 + v1.y ** 2;
+                let abs2 = v2.x ** 2 + v2.y ** 2;
+                let dot = (v1.x * v2.x + v1.y * v2.y) ** 2;
+                return Math.abs(Math.abs(dot) - abs1 * abs2) < EPS;
+            }
+            function getDist(edge1, edge2) {
+                let c1 = { x: (edge1.p1.x + edge1.p2.x) / 2, y: (edge1.p1.y + edge1.p2.y) / 2 };
+                let c2 = { x: (edge2.p1.x + edge2.p2.x) / 2, y: (edge2.p1.y + edge2.p2.y) / 2 };
+                return Math.sqrt((c1.x - c2.x) ** 2 + (c1.y - c2.y) ** 2);
+            }
+
+            datas[i].theta += Math.PI * 8 / 12;
+            for (let _ = 0; _ < 8; _ += 1) {
+                datas[i].theta -= Math.PI / 12;
+                for (let j = 0; j < datas.length; j += 1) {
+                    if (i == j) continue;
+                    for (const edge1 of getEdges(datas[i])) {
+                        for (const edge2 of getEdges(datas[j])) {
+                            if (!isParallel(edge1, edge2)) continue;
+                            let nowDist = getDist(edge1, edge2);
+                            if (nowDist < minDist) {
+                                minDist = nowDist;
+                                let c1 = { x: (edge1.p1.x + edge1.p2.x) / 2, y: (edge1.p1.y + edge1.p2.y) / 2 };
+                                let c2 = { x: (edge2.p1.x + edge2.p2.x) / 2, y: (edge2.p1.y + edge2.p2.y) / 2 };
+                                dx = c2.x - c1.x;
+                                dy = c2.y - c1.y;
+                                theta = datas[i].theta;
+                            }
+                        }
+                    }
+                }
+            }
+
+            datas[i].x += dx;
+            datas[i].y += dy;
+            datas[i].theta = theta;
+            let points = getPoints(datas[i]);
+            polygon.setAttribute('points', points);
+        }
+        document.onmouseup = function () {
+            if (drag.target == null) return;
+            drag.isMouseDown = false;
+
+            let i = parseInt(drag.target.id);
+            if (datas[i].x < 140 && datas[i].y < 60) {
+                datas[i] = new Data(datas[i].type);
+                drag.target.setAttribute('points', getPoints(datas[i]));
+                return;
+            }
+            gyouza(drag.target);
+            if (datas[i].isBaby) {
+                createNewPolygon(datas[i].type);
+                datas[i].isBaby = false;
+            }
+        };
+        document.onmousemove = function (ev) {
+            if (drag.isMouseDown) {
+                let i = parseInt(drag.target.id);
+                datas[i].x = ev.clientX - drag.offsetX;
+                datas[i].y = ev.clientY - drag.offsetY;
+                let points = getPoints(datas[i]);
+                drag.target.setAttribute('points', points);
+            }
+        };
+    </script>
+</body>
+
+</html>
