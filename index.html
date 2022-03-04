@@ -170,7 +170,7 @@
             drag.isMouseDown = false;
 
             let i = parseInt(drag.target.id);
-            if (datas[i].x < 140 && datas[i].y < 60) {
+            if (datas[i].isBaby && datas[i].x < 140 && datas[i].y < 60) {
                 datas[i] = new Data(datas[i].type);
                 drag.target.setAttribute('points', getPoints(datas[i]));
                 return;
