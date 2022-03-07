@@ -41,6 +41,7 @@
             this.y = (type == 'square' ? 20 : type == 'triangle' ? 20 + D * (1 - Math.sqrt(3) / 2) : 0);
             this.theta = (type == 'square' ? Math.PI / 4 : type == 'triangle' ? Math.PI / 6 : 0);
             this.isBaby = true;
+            this.isRemoved = false;
         }
         let datas = [];
 
@@ -108,6 +109,8 @@
         function handleMouseDown(ev, id) {
             let i = parseInt(id);
             let fig = document.getElementById(id);
+            svg.removeChild(fig);
+            svg.appendChild(fig);
             ev.preventDefault();
             drag.offsetX = ev.clientX - datas[i].x;
             drag.offsetY = ev.clientY - datas[i].y;
@@ -118,18 +121,50 @@
         createNewPolygon('triangle');
 
 
-        function gyouza(polygon) {
+        function fix(polygon) {
             let i = parseInt(polygon.id);
             let dx = 0, dy = 0;
             let theta = datas[i].theta;
             let minDist = D;
+            function isOverlap(i, j) {
+                function det(x1, y1, x2, y2) {
+                    return x1 * y2 - x2 * y1;
+                }
+                function isCcw(edge, point) {
+                    let x1 = edge.p1.x, x2 = edge.p2.x, x3 = point.x;
+                    let y1 = edge.p1.y, y2 = edge.p2.y, y3 = point.y;
+                    return det(x2 - x1, y2 - y1, x3 - x1, y3 - y1) > EPS;
+                }
+
+                for (let edge of getEdges(datas[i])) {
+                    let check = false;
+                    let points = getPoints(datas[j]);
+                    for (let k = 0; k < points.length; k += 2) {
+                        let point = { x: points[k], y: points[k + 1] };
+                        check |= isCcw(edge, point);
+                    }
+                    if (!check) return false;
+                }
+                [i, j] = [j, i];
+                for (let edge of getEdges(datas[i])) {
+                    let check = false;
+                    let points = getPoints(datas[j]);
+                    for (let k = 0; k < points.length; k += 2) {
+                        let point = { x: points[k], y: points[k + 1] };
+                        check |= isCcw(edge, point);
+                    }
+                    if (!check) return false;
+                }
+                [i, j] = [j, i];
+                return true;
+            }
             function isParallel(edge1, edge2) {
                 let v1 = { x: edge1.p1.x - edge1.p2.x, y: edge1.p1.y - edge1.p2.y };
                 let v2 = { x: edge2.p1.x - edge2.p2.x, y: edge2.p1.y - edge2.p2.y };
-                let abs1 = v1.x ** 2 + v1.y ** 2;
-                let abs2 = v2.x ** 2 + v2.y ** 2;
-                let dot = (v1.x * v2.x + v1.y * v2.y) ** 2;
-                return Math.abs(Math.abs(dot) - abs1 * abs2) < EPS;
+                let abs1 = Math.sqrt(v1.x ** 2 + v1.y ** 2);
+                let abs2 = Math.sqrt(v2.x ** 2 + v2.y ** 2);
+                let dot = v1.x * v2.x + v1.y * v2.y;
+                return Math.abs(dot + abs1 * abs2) < EPS;
             }
             function getDist(edge1, edge2) {
                 let c1 = { x: (edge1.p1.x + edge1.p2.x) / 2, y: (edge1.p1.y + edge1.p2.y) / 2 };
@@ -137,19 +172,36 @@
                 return Math.sqrt((c1.x - c2.x) ** 2 + (c1.y - c2.y) ** 2);
             }
 
-            datas[i].theta += Math.PI * 8 / 12;
-            for (let _ = 0; _ < 8; _ += 1) {
-                datas[i].theta -= Math.PI / 12;
+            datas[i].theta += Math.PI * 4 / 6;
+
+            let target = -1;
+
+            for (let _ = 0; _ < 4; _ += 1) {
+                datas[i].theta -= Math.PI / 6;
                 for (let j = 0; j < datas.length; j += 1) {
                     if (i == j) continue;
+                    if (datas[j].isBaby) continue;
+                    if (datas[j].isRemoved) continue;
                     for (const edge1 of getEdges(datas[i])) {
                         for (const edge2 of getEdges(datas[j])) {
                             if (!isParallel(edge1, edge2)) continue;
+                            let c1 = { x: (edge1.p1.x + edge1.p2.x) / 2, y: (edge1.p1.y + edge1.p2.y) / 2 };
+                            let c2 = { x: (edge2.p1.x + edge2.p2.x) / 2, y: (edge2.p1.y + edge2.p2.y) / 2 };
+
+                            datas[i].x += c2.x - c1.x;
+                            datas[i].y += c2.y - c1.y;
+                            let overlap = false;
+                            for (let k = 0; k < datas.length; k += 1) {
+                                if (k == i) continue;
+                                overlap |= isOverlap(i, k);
+                            }
+                            datas[i].x -= c2.x - c1.x;
+                            datas[i].y -= c2.y - c1.y;
+                            if (overlap) continue;
+
                             let nowDist = getDist(edge1, edge2);
                             if (nowDist < minDist) {
                                 minDist = nowDist;
-                                let c1 = { x: (edge1.p1.x + edge1.p2.x) / 2, y: (edge1.p1.y + edge1.p2.y) / 2 };
-                                let c2 = { x: (edge2.p1.x + edge2.p2.x) / 2, y: (edge2.p1.y + edge2.p2.y) / 2 };
                                 dx = c2.x - c1.x;
                                 dy = c2.y - c1.y;
                                 theta = datas[i].theta;
@@ -158,7 +210,6 @@
                     }
                 }
             }
-
             datas[i].x += dx;
             datas[i].y += dy;
             datas[i].theta = theta;
@@ -170,12 +221,13 @@
             drag.isMouseDown = false;
 
             let i = parseInt(drag.target.id);
-            if (datas[i].isBaby && datas[i].x < 140 && datas[i].y < 60) {
-                datas[i] = new Data(datas[i].type);
-                drag.target.setAttribute('points', getPoints(datas[i]));
-                return;
+            if (datas[i].isRemoved) return;
+            if (datas[i].y < 80) {
+                svg.removeChild(drag.target);
+                datas[i].isRemoved = true;
+            } else {
+                fix(drag.target);
             }
-            gyouza(drag.target);
             if (datas[i].isBaby) {
                 createNewPolygon(datas[i].type);
                 datas[i].isBaby = false;
